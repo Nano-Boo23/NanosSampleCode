@@ -1,5 +1,5 @@
 # What's this project?
-This was my very first C++ project; it served as a way for to learn the syntax. I wouldn't call this a masterpiece, but I had fun while making it.
+This was my very first C++ project; it served as a way for to learn the syntax. I wouldn't call this a masterpiece, but I had fun while making it. <br>
 It utilizes OpenGL and simulates gravity with multiple balls as if they were astral bodies, getting pulled towards eachother depending on their mass. It also of course handles physics updates, collisions, and rendering.
 
 It's a really simple project but thought that I might as well add it to my portfolio to immortalize it.
