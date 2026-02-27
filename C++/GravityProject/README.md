@@ -1,6 +1,9 @@
+# What's this project?
 This was my very first C++ project. It utilizes OpenGL and simulates gravity with multiple balls as if they were astral bodies and getting pulled towards eachother depending on their mass. It also of course handles physics updates, collisions, and rendering.
 
 It's a really simple project but thought that I might as well add it to my portfolio to immortalize it.
+
+### Video samples
 
 <hz><br>
 [Demo video: Applying a generic downwards gravity instead of gravitational pull](https://github.com/user-attachments/assets/d6832f1e-aef6-44e2-bcc8-6a87841ff8ed)
