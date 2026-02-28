@@ -5,7 +5,7 @@ Hiya! Welcome to my Github repository that I use as a scripting portfolio. Do no
 ## About this portfolio and me
 I use this repo alongside a more updated and specific portfolio for each application I take to showcase my skills as a scripter. <br>
 
-I understand that working in projects with a large team requires good communication, which also englobes the fact that scripts HAVE to be readable, reusable, and intuitive for other scripters to edit. So in these situations, my main focus naturally is to stay as communicative as I possibly can with the team.
+I understand that working in projects with a large team requires good communication, which also englobes the fact that scripts HAVE to be readable, reusable, and intuitive for other scripters to edit. That is why my main focus as a scripter is naturally to always be as communicative as I possibly can, accept feedback and quickly learn from my mistakes and strive to be a better scripter than I was yesterday.
 
 # Introduction
 This portfolio serves as a collection of selective work that I have decided to showcase, including the source code of partial or full programs / systems alongside a README file for each project, detailing my work, gving context on why and what it was made for, and including images and videos. <br>
