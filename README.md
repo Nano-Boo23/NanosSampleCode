@@ -1,7 +1,10 @@
 # Nano_Boo's general scripting portfolio
 
 Hiya! Welcome to my Github repository that I use as a scripting portfolio. Do note that it is still unfinished. <br>
+
+## About this portfolio and me
 I use this repo alongside a more updated and specific portfolio for each application I take to showcase my skills as a scripter. <br>
+
 I understand that working in projects with a large team requires good communication, which also englobes the fact that scripts HAVE to be readable, reusable, and intuitive for other scripters to edit. So in these situations, my main focus naturally is to stay as communicative as I possibly can with the team.
 
 # Introduction
