@@ -8,6 +8,7 @@ I use this repo alongside a more updated and specific portfolio for each applica
 I understand that working in projects with a large team requires especially good communication, and so my main focus as I work in a team is to always make my scripts readable, reusable, and intuitive for other scripters to edit. <br>
 I Also am very communicative, send daily progress reports, accept feedback, quickly learn from my mistakes and strive to be a better scripter than I was yesterday.
 
+You can contact me on discord if you want to talk about anything: @Nano_Boo
 # Introduction
 This portfolio serves as a collection of selective work that I have decided to showcase, including the source code of partial or full programs / systems alongside a README file for each project, detailing my work, giving context on why and what it was made for, and usually **including images or videos**. <br>
 
