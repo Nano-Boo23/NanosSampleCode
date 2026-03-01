@@ -6,6 +6,8 @@ The inventory system that this code is used for was also made by me, and I would
 I can however, include a video of an early-ish version of the inventory system in action. <br>
 [Showcase of the inventory system for EoA](https://github.com/user-attachments/assets/8e7806b7-76e7-4cb0-87ae-bed1e7d58142)
 
+https://github.com/user-attachments/assets/8e7806b7-76e7-4cb0-87ae-bed1e7d58142
+
 
 ### File extension notes:
 `.lua` -> Module script <br>
