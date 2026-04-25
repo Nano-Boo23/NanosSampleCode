@@ -1,5 +1,5 @@
 --!strict
--- module is a proxy based data receiver for clients
+-- module is a data receiver for clients
 
 --[[
 DESC:
@@ -157,10 +157,12 @@ UpdateClientData.OnClientEvent:Connect(function(path: string, value: any)
 		if not field then break end
 	end
 	
+	local lastKey = pathTable[#pathTable]
+	
 	if not field then warn("[ClientData] Received a client data update for an unknown path: "..path) return end
 	
 	--update that field
-	field = value
+	field[lastKey] = value
 	
 	--fire any active .Changed() events 
 	FireChangedSignals(string.split(path,"."), value)
@@ -286,7 +288,7 @@ proxy_mt.__newindex = function(self:ProxyTable, key:string, value:any): ()
 	data_subfield[finalKey] = value
 
 	--fire any active .Changed signals and parents
-	FireChangedSignals(path)
+	FireChangedSignals(path, value)
 
 	return
 end
