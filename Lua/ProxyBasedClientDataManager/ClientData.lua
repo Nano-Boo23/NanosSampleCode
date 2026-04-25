@@ -1,5 +1,4 @@
 --!strict
--- module is called ClientData in-studio
 -- module is a proxy based data receiver for clients
 
 --[[
