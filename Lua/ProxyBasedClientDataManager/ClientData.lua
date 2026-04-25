@@ -1,5 +1,5 @@
 --!strict
--- module is a data receiver for clients
+-- module is a proxy based data receiver for clients
 
 --[[
 DESC:
