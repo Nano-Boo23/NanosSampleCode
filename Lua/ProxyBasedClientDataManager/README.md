@@ -3,7 +3,7 @@ A client sided module of my proxy-based data management modules for EoA, with th
 Custom made for [Echoes of Arcania](https://www.roblox.com/games/94335825089405/Echoes-of-Arcania) <br>
 
 I also made a video on these modules for our scripters and devs in general: [Link to YouTube video (unlisted)](https://youtu.be/3Wee_dK8i1Y)
-<sup><sub>(Note that it is slightly outdated now)</sub></sup>
+<br><sub><b>(Note that it is slightly outdated now)</b></sub></br>
 
 <img width="845" height="845" alt="image" src="https://github.com/user-attachments/assets/9746bbcb-cf90-4232-8ca7-565a40f82adb" />
 
