@@ -15,42 +15,22 @@ to use any .Get().
 --- / Services /
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
-local ServerScriptService = game:GetService("ServerScriptService") --for type casting in studio
+local ServerStorage = game:GetService("ServerStorage") --for type casting in studio
 
 --- / Types / fun fact: anything inside a type cast wont run at runtime! these lines below wont error in the client.
-local DataTemplates: typeof(require(ServerScriptService.PlayerDataTracking.ProfileDataLoader.DataTemplates))
+local DataTemplates: typeof(require(ServerStorage.Modules.Data.DataTemplates))
 
 type Slot = typeof(DataTemplates.SLOT_TEMPLATE)
 type Settings = typeof(DataTemplates.PROFILE_TEMPLATE.Settings)
 type ClientData = {Slot: Slot, Settings: Settings}
 
---compressed MethodDescriptions
-local MethodHolder = {}
---[[Returns a copy of the original data table of the current path.
-
-Works in ANY path, even if this method doesn't show up and even if the --!strict type checker throws "Key 'GetRaw' not found in table ...".
-Mainly meant for debugging. ]]
-function MethodHolder:GetRaw():{any} local a={}::{any} return a end
-type GetRaw = {GetRaw: typeof(MethodHolder.GetRaw)}
---[[Returns a BindableEvent that fires every time the current path's value is changed. Additionally, if this value is a table, this event will also fire when any nested value is changed.
-The optional {LastKey} parameter is used to get the bindable for a final table key, as trying to do so without it will error because you tried indexing a non table.
-The event returns the new value set to the currenet path.
-Events fired because a sub-event was fired do not return any value.
-
-Works in ANY path except final keys, even if this function doesn't show up and even if the --!strict type checker throws "Key 'Changed' not found in table ...". ]]
-function MethodHolder.ChangedEvent(LastKey: string?): BindableEvent return Instance.new("BindableEvent") end
-type Changed = {Changed: typeof(MethodHolder.ChangedEvent)}
---Yields the current thread until the bindable fires and returns the Slot data.
-function MethodHolder:WaitForSlot():Slot local a={}::Slot return a end
-type WaitForSlot = {WaitForSlot: typeof(MethodHolder.WaitForSlot)}
-
-type SlotProxy = Slot & Changed & GetRaw
-type SettingsProxy = Settings & Changed & GetRaw
-type ClientProxy = {Slot: SlotProxy, Settings: SettingsProxy} & Changed & WaitForSlot & GetRaw
+local MethodDescriptions = require(script.ClientDataMethodDescriptions)
+type SlotProxy = Slot & MethodDescriptions.Generic
+type SettingsProxy = Settings & MethodDescriptions.Generic
+type ClientProxy = {Slot: SlotProxy, Settings: SettingsProxy} & MethodDescriptions.All
 
 type ProxyTable = {_path: {string}} --real proxy table type used in this module
 
-MethodHolder = nil --delete after making types; dont use up memory
 
 --- / Variable setup /
 local Player = game.Players.LocalPlayer
@@ -84,7 +64,7 @@ local function FireChangedSignals(path:{string}, value:any?): ()
 		local currentPath = table.concat(path, ".", 1, i)
 
 		if ChangedEvents[currentPath] then
-			ChangedEvents[currentPath]:Fire(value)
+			ChangedEvents[currentPath]:Fire(value, table.concat(path, "."))
 		end
 	end
 end
@@ -148,7 +128,7 @@ end)
 
 
 --- / Update listener /
-UpdateClientData.OnClientEvent:Connect(function(path: string, value: any)
+UpdateClientData.OnClientEvent:Connect(function(value: any, path: string)
 	local field = ClientData :: {[string]: {any}} --type checker silencer
 	local pathTable = string.split(path,".")
 	
@@ -159,7 +139,7 @@ UpdateClientData.OnClientEvent:Connect(function(path: string, value: any)
 	
 	local lastKey = pathTable[#pathTable]
 	
-	if not field then warn("[ClientData] Received a client data update for an unknown path: "..path) return end
+	if not field then warn("[ClientData]: Received a client data update for an unknown path: "..path) return end
 	
 	--update that field
 	field[lastKey] = value
@@ -199,6 +179,15 @@ local ProxyMethods = { --methods that can be used in any path
 		return ChangedEvents[p]
 	end,
 }
+local PathedProxyMethods = {
+	WaitForSlot = function(): Slot
+		while not ClientData or not ClientData.Slot do
+			task.wait()
+		end
+		IsSlotDataReady = true
+		return PooledSubproxies["Slot"] :: Slot or CreateProxy({"Slot"}) :: Slot
+	end
+}
 
 --- / Shared metatable and metamethods /
 local proxy_mt = {}
@@ -207,23 +196,40 @@ proxy_mt.__index = function(self:ProxyTable, key:string): any
 	local path = self._path
 	local data = ClientData
 	
-	--yield until slot data is ready
+	--had problems with this. if the key were to be nil, when the key is inserted to newPath, since its nil, it would literally just be the CURRENT path.
+	if key == nil then return nil end
+	
+	--error if slot data is not ready
 	if not IsSlotDataReady and key == "Slot" then
-		error("[ClientData] Slot data not yet ready. :Wait() for it first:\n  local Slot = ClientData:WaitForSlot()")
-		
-	elseif key == "WaitForSlot" then
-		return function()
-			while not ClientData or not ClientData.Slot do
-				task.wait()
-			end
-			IsSlotDataReady = true
-			return ClientData.Slot
-		end
+		error("[ClientData]: Slot data not yet ready. Wait for it first:\n  local Slot = ClientData:WaitForSlot()")
 	end
 
-	--look up possible method in ProxyMethods.
+	--look up possible generic path method in ProxyMethods.
 	if ProxyMethods[key] then
-		return (function(...) return ProxyMethods[key](self, ...) end) --returns a wrapped function because it uses local variables
+		return (
+			function(...)
+				local params = {...}
+				if params[1] and params[1]["_owner"] then table.remove(params,1) end --if method is called as ":" avoid duplicate self
+				return ProxyMethods[key](self, table.unpack(params))
+			end) --returns a wrapped function because it uses the local self
+	end
+	
+	--look for path-specific method in PathedProxyMethods. return the func if it it exists in the current path.
+	local method:any = PathedProxyMethods
+	for _,pathKey in path do
+		if not method[pathKey] then
+			method = nil
+			break
+		end
+		method = method[pathKey]
+	end
+	if type(method) == "table" and type(method[key]) == "function" then
+		return (
+			function(...)
+				local params = {...}
+				if params[1] and params[1]["_owner"] then table.remove(params,1) end --if method is called as ":" avoid duplicate self
+				return method[key](self, table.unpack(params))
+			end) --returns a wrapped function because it uses the local self
 	end
 
 	--not a method. look for value in original data table.
@@ -250,9 +256,11 @@ proxy_mt.__newindex = function(self:ProxyTable, key:string, value:any): ()
 	local path = self._path
 	local data = ClientData
 	
-	--yield until slot data is ready
+	if key == nil then return end
+	
+	--error if slot data is not ready
 	if not IsSlotDataReady and key == "Slot" then
-		error("[ClientData] Slot data not yet ready. :Wait() for it first:\n  local Slot = ClientData:WaitForSlot()")
+		error("[ClientData]: Slot data not yet ready. Wait for it first:\n  local Slot = ClientData:WaitForSlot()")
 	end
 		
 	local newPath = table.clone(rawget(self :: any, "_path")) :: {string}
@@ -281,8 +289,8 @@ proxy_mt.__newindex = function(self:ProxyTable, key:string, value:any): ()
 
 	--i wasnt sure if to warn, error or return the reason (edit these error / warning lines if necessary)
 	if err then
-		warn("[ClientData] "..err.."\nTried to assign value:", value, "\nTo path: "..table.concat(newPath,".")) --if value is a table, in error() it would print the string memory reference of the table instead of the table fields (ex: 0x123abc456) 
-		error("[ClientData] Proxy caught an error, information in previous warning message.")
+		warn("[ClientData]: "..err.."\nTried to assign value:", value, "\nTo path: "..table.concat(newPath,".")) --if value is a table, in error() it would print the string memory reference of the table instead of the table fields (ex: 0x123abc456) 
+		error("[ClientData]: Proxy caught an error, information in previous warning message.")
 	end
 
 	data_subfield[finalKey] = value
@@ -304,9 +312,9 @@ proxy_mt.__tostring = function(self:ProxyTable): string
 		value = value[key] 
 	end
 
-	warn("[ClientData] 'tostring' called on ClientData proxy on path:",path)
+	warn("[ClientData]: 'tostring' called on ClientData proxy on path:",path)
 	warn(value)
-	return ""
+	return "PROXY TABLE"
 end
 
 proxy_mt.__len = function(self:ProxyTable): number
@@ -317,7 +325,10 @@ proxy_mt.__len = function(self:ProxyTable): number
 	for _,key in ipairs(path) do --go to the current recursive call's path in the real data table
 		value = value[key] 
 	end
-
+	
+	if type(value) ~= "table" then
+		error("[ClientData]: Cannot get length of a non-table value at path: " .. table.concat(path, "."))
+	end
 	return #value
 end
 
@@ -329,8 +340,12 @@ proxy_mt.__iter = function(self:ProxyTable): (typeof(next), {[string]: any}, nil
 	for _,key in ipairs(path) do --go to the current recursive call's path in the real data table
 		value = value[key]
 	end
+	
+	if type(value) ~= "table" then
+		error("Attempt to iterate over non-table value")
+	end
 
-	return next, (type(value) == "table" and DeepCopy(value)) or value :: any
+	return next, value, nil
 end
 
 table.freeze(proxy_mt) --prevent scripters from somehow editing this mt with getmetatable()
@@ -359,7 +374,6 @@ end
 
 --create the proxy
 ClientProxy = CreateProxy({}) :: ClientProxy
-
 
 --- / Module return /  (return the proxy bc theres only 1 since its local)
 return ClientProxy
