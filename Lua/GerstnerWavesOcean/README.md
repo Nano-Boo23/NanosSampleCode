@@ -1,5 +1,5 @@
 # What's this project?
-(documentation still in progress)
+***(documentation still in progress)*** <br>
 This client-server module simulates an infinite ocean by dynamically placing skinned meshes based on the player's current camera position, and moving the bones in those meshes using a Gerstner / Trochoidal wave equation to simulate the movement of realistic waves.
 <br>
 # How does the module work?
