@@ -8,7 +8,7 @@ That probably sounded like _a mouthful of random words_ to some readers, so let 
 Before anything, the module needs _something_ to move, so (in my case) I utilized a skinned mesh, which is basically a mesh with a bunch of bones that you can move. I created it in Blender by subdividing a mesh, placing armatures (also called bones) on those vertices, and exporting it to Roblox Studio. This allows movement of that mesh via editing the properties of the bones.
 <br>
 <br>
-The module has 2 main functions, which I reccomend calling at `RenderStepped` and every `0.5` seconds respectively: <br>
+The module has 2 main functions, which I reccomend calling every `0.5` seconds and at `RenderStepped` respectively: <br>
 \- `GenerateMeshes(Pos: Vector3)` <br>
 \- `RenderWaves()` <br>
 <br>
