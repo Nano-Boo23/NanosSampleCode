@@ -12,9 +12,8 @@ The module has 2 main functions, which I reccomend calling at `RenderStepped` an
 \- `GenerateMeshes(Pos: Vector3)` <br>
 \- `RenderWaves()` <br>
 <br>
-
-`GenerateMeshes` places the skinned meshes in a grid pattern around the passed `Vector3`. The radius of this mesh placement is based on the `FAKE_RENDER_DISTANCE` setting.
-`RenderWaves` is where all the wave computation happens. Based on 
+`GenerateMeshes` places the skinned meshes in a grid pattern around the passed `Vector3`. The radius of this mesh placement is based on the `FAKE_RENDER_DISTANCE` setting. <br>
+`RenderWaves` is where all the wave computation happens. (here is where Gerster waves r used)
 
 # Module configuration 
 If you want to play around with the showcase game you'll have to understand what some of the settings affect:
