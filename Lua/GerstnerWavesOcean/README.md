@@ -22,6 +22,15 @@ If you want to play around with the showcase game you'll have to understand what
 Showcase game:
 https://www.roblox.com/games/86081630361588/M-E-O-W#!/game-instances
 
+## Update log 
+Since Roblox limits the game's description to 1000 characters, here's the full update log, from most recent to oldest:
+- v1.6: Made some QoL changes. Most notably, you can now drag the gerstner wave panel around.
+- v1.5: Made wave direction and wind direction UI more intuitive
+- v1.4: Added player buoyancy on the wave surface & added UI touchscreen compatibility for phones
+- v1.3: Added gerstner wave visualization panel (a 2D sllice of the combined 3D waves)
+- v1.2: Added gerstner wave / sinusoidal waves configuration panel, along with an integrated graph to view a 2d version of the current wave's equation
+- v1.1: Added tab option to modify the current wave equations
+
 ### File extension notes:
 `.lua` -> Module script <br>
 `.client.lua` -> Local script <br>
