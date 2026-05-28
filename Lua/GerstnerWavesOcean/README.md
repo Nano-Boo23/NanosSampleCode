@@ -24,7 +24,7 @@ https://www.roblox.com/games/86081630361588/M-E-O-W#!/game-instances
 
 ## Update log 
 Since Roblox limits the game's description to 1000 characters, here's the full update log, from most recent to oldest:
-- v1.7: Added individual wave adding / removing, and wave importing / exporting for sharing wave combinations.
+- v1.7: Added individual wave adding / removing, and bulk wave importing / exporting for sharing wave combinations.
 - v1.6: Made some QoL changes. Most notably, you can now drag the gerstner wave panel around.
 - v1.5: Made wave direction and wind direction UI more intuitive
 - v1.4: Added player buoyancy on the wave surface & added UI touchscreen compatibility for phones
