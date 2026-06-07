@@ -1,6 +1,8 @@
 --!strict
 --!native
 
+-- Module made by @Nano_Boo (discord) / @Nano_BooYT (Roblox)
+
 --- / Module /
 local WavesModule = {}
 
