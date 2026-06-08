@@ -130,12 +130,14 @@ Workspace
 ### Using your own mesh
 
 I identified that bones named 0,1,2,3 are the corner bones, and that names up to 39 (included) are edge bones. I'm using this knowledge for an incredibly fast but hard-coded relative bone position lookup. If you want to use my infrastructure, you'll have to re-map `EDGE_NAMES` in `WavesModule`. You can quickly check your own mesh corners / edges with this command:
+```lua
 for _, bone in ipairs(workspace.YourMesh:GetDescendants()) do
     if bone:IsA("Bone") then
         local local_pos = workspace.YourMesh.CFrame:PointToObjectSpace(bone.WorldPosition)
         print(bone.Name, math.round(local_pos.X), math.round(local_pos.Z))
     end
 end
+```
 
 ---
 
