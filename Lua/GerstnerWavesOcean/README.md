@@ -145,6 +145,7 @@ end
 
 Since Roblox limits the game description to 1000 characters, here's the full update log, most recent first:
 
+- **v1.9**: Optimized wave computation phase and cleaned up code.
 - **v1.8**: Added presets for every roblox quality level. Added a fake horizon to better give an illusion of an infinite ocean. Adapted UI for smaller devices.
 - **v1.7**: Added individual wave adding/removing, plus bulk wave importing/exporting for sharing wave combinations.
 - **v1.6**: QoL changes; most notably, you can now drag the Gerstner wave panel around.
