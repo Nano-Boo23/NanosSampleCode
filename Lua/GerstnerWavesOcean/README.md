@@ -120,7 +120,8 @@ These presets only touch the render / update / distance settings. `WIND`, `SEA_L
 ```
 ReplicatedStorage
 ├── WavesModule        (ModuleScript)    ← this module
-│   └── SeaMesh        (MeshPart)        ← the skinned ocean tile
+│   ├── SeaMesh        (MeshPart)        ← the skinned ocean tile
+│   └── HorizonMesh    (MeshPart)        ← a boneless mesh with a SurfaceAppearance child
 └── SettingPresets     (ModuleScript)    ← quality presets q1–q10
 
 Workspace
