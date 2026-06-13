@@ -10,25 +10,27 @@ local WavesModule = {}
 local LINK_THRESHOLD = 0.5  -- (studs) bones closer than this are considered shared at a seam
 local SPHERICAL_RENDERING = false --could cause problems if set to true (big spaces between meshes and horizon parts)
 
--- Check the github documentation buddy https://github.com/Nano-Boo23/NanosSampleCode/blob/main/Lua/GerstnerWavesOcean/README.md
+local MAX_PART_SIZE = 2048 -- (studs) Roblox's per-axis Part size limit (used for horizon parts)
+local HORIZON_EXTENT = 10000 -- (studs) how far each frame strip reaches outward (clamped to fit MAX_PART_SIZE)
+local HORIZON_THICKNESS = 1 -- (studs) vertical thickness of the frame slabs
+local HORIZON_COLOR = Color3.fromRGB(25, 60, 90)
+local HORIZON_MATERIAL = Enum.Material.Ice
+
+-- Check the github documentation buddy -> https://github.com/Nano-Boo23/NanosSampleCode/blob/main/Lua/GerstnerWavesOcean/README.md
+-- There are more complete explanations in there about the module's public config
 local conf = WavesModule --abbreviation purposes
 conf.DEBUG = false
 
 conf.WIND = Vector3.new(-10,0,10) --northeast
 conf.SEA_LEVEL = 50 --(studs) at what Y level the mesh will generate at
 conf.RENDER_DISTANCE = 2 --(chunks) the spherical radius that determines skinned mesh generation and rendering around the camera.
-conf.LOWERED_RENDER_RATE_DISTANCE = 2 --(chunks) in what chunk the vertices get updated with less frequency
+conf.LOWERED_RENDER_RATE_DISTANCE = 2 --(chunks) after what chunk the vertices get updated with less frequency
 conf.RENDER_RATE_FALLOFF = 5 -- how many less updates a chunk gets proportional to current distance
 conf.EDGE_PROPAGATION = false --propagates the positions of edge bones to adjacent meshes to prevent visible mesh tearing (not performance friendly though)
-
--- (chunks) extra ring of meshes generated just beyond RENDER_DISTANCE. The rendered edge needs
--- one ring of neighbours past it so IsMeshBorder has meshes to animate against; the fake horizon
--- now covers everything further out, so this small margin is the only generation buffer we need.
--- Effective generation radius = conf.RENDER_DISTANCE + conf.BORDER_BUFFER.
-conf.BORDER_BUFFER = 1
+conf.BORDER_BUFFER = 1 --(chunks) extra ring of meshes generated just beyond RENDER_DISTANCE.
 
 conf.WAVES = {
-	{direction = {X = -2.0,	Z = 1.0},	amplitude = 7.0,	speed = 0.01,	wavelength = 400,	steepness = 0.1},
+	{direction = {X = -2.0,	Z = 1.0},	amplitude = 9.9,	speed = 0.01,	wavelength = 400,	steepness = 0.1},
 	{direction = {X = -1.0,	Z = -10.0},	amplitude = 1.2,	speed = 0.15,	wavelength = 80,	steepness = 0.1},
 	{direction = {X = 9.4,	Z = -3.0},	amplitude = 0.2,	speed = 0.3,	wavelength = 12,	steepness = 0.6},
 } :: {GerstnerWave}
@@ -58,14 +60,19 @@ type GerstnerWave = {
 	speed: number,
 	steepness: number,
 }
+type PrecomputedWave = {
+	biasedWindDir: Vector2,
+	k: number,
+	c: number,
+	a: number,
+	amplitude: number
+}
 type EdgeBones = {minX: {Bone}, maxX: {Bone}, minZ: {Bone}, maxZ: {Bone}}
 type MeshData = {
 	Bones: {Bone},
-	InnerBones: {Bone},
 	EdgeBones: EdgeBones,
 	Coords: {X: number, Z: number},
 }
-type EdgeNames = {minX: {string}, maxX: {string}, minZ: {string}, maxZ: {string}}
 
 type Meshes = {[MeshPart]: MeshData}
 type PooledMeshes = {[MeshPart]: {Bones: {Bone}}}
@@ -73,14 +80,24 @@ type PooledMeshes = {[MeshPart]: {Bones: {Bone}}}
 
 --- / Variables /
 local BaseMesh: MeshPart = script:WaitForChild("SeaMesh")
+local BaseHorizonPart: MeshPart = script:WaitForChild("HorizonPart")
+local SeaModel: Model = workspace:WaitForChild("Sea")
 local CurrentUpdateCycle = 0
+local MeshSize = BaseMesh.Size.X
+local HalfMeshSize = MeshSize / 2
 
 local Meshes: Meshes = {}
 local PooledMeshes: PooledMeshes = {}
 local Chunks: {[number]: {[number]: MeshPart}} = {}
 local VisibleMeshes: {[MeshPart]: boolean} = {}
+local UpdatingThisFrame: {[MeshPart]: boolean} = {} -- table used in RenderWaves()
+local PrecomputedWaves:{PrecomputedWave} = {}
+local BoneLinks: {[Bone]: {Bone}} = {} --1-to-many bone links: a bone on one mesh -> list of matching bones on neighboring meshes
+local HorizonParts: {MeshPart} = {}
+local lastHorizonChunkX: number? = nil
+local lastHorizonChunkZ: number? = nil
 
---mapping to reduce needed calculations
+--mapping to reduce needed calculations. :GetChildren()'s order is consistent, as long as we dont add instances. (which we dont)
 local SharedBonePositions: {Vector3} = {}
 for i, bone in ipairs(BaseMesh:GetChildren()) do
 	if bone:IsA("Bone") then
@@ -88,72 +105,52 @@ for i, bone in ipairs(BaseMesh:GetChildren()) do
 	end
 end
 
---different, a bit less efficient mapping for other functions that dont do :GetChildren on the mesh
-local SharedBoneLocalPosByName: {[string]: Vector3} = {}
-for _, bone in ipairs(BaseMesh:GetChildren()) do
-	if bone:IsA("Bone") then
-		SharedBoneLocalPosByName[bone.Name] = bone.Position
-	end
-end
-
--- Hard-coded tables for fast edge bone lookups
-local EDGE_NAMES:EdgeNames = {
-	-- sorted Z ascending (-50 → 50)
+-- Hard-coded table for fast edge bone lookups. Tracks what bones are in each edges.
+local BoneEdgeOwnership = {
+	-- sorted Z ascending (-50 -> 50)
 	maxX = {"0","12","11","10","9","8","7","6","5","4","2"},
 	minX = {"1","22","23","24","25","26","27","28","29","30","3"},
-	-- sorted X ascending (-50 → 50)
+	-- sorted X ascending (-50 -> 50)
 	maxZ = {"3","31","32","33","34","35","36","37","38","39","2"},
 	minZ = {"1","21","20","19","18","17","16","15","14","13","0"},
 }
--- Maps boneName -> list of edge keys it belongs to
--- Corners will have 2 entries, regular edge bones will have 1
-local BONE_EDGE_MEMBERSHIP: {[string]: {string}} = {}
-for edgeKey, names in EDGE_NAMES :: {[string]: {string}} do
+
+-- The reverse of the previous hard-coded table. Tracks in what edges each bone is.
+local BoneEdgeMembership: {[string]: {string}} = {}
+for edgeKey, names in BoneEdgeOwnership :: {[string]: {string}} do
 	for _, name in ipairs(names) do
-		if not BONE_EDGE_MEMBERSHIP[name] then
-			BONE_EDGE_MEMBERSHIP[name] = {}
+		if not BoneEdgeMembership[name] then
+			BoneEdgeMembership[name] = {}
 		end
-		table.insert(BONE_EDGE_MEMBERSHIP[name], edgeKey)
+		table.insert(BoneEdgeMembership[name], edgeKey)
 	end
 end
 
-local function ClassifyBones(mesh: MeshPart, bones: {Bone}): ({Bone}, EdgeBones)
-	local inner: {Bone} = {}
-	local edge: EdgeBones = {minX = {}, maxX = {}, minZ = {}, maxZ = {}}
-
-	for _, bone in ipairs(bones) do
-		local edgeKeys = BONE_EDGE_MEMBERSHIP[bone.Name]
-		if edgeKeys then
-			-- corner bones get inserted into both their edge lists
-			for _, edgeKey in ipairs(edgeKeys) do
-				table.insert((edge :: any)[edgeKey], bone)
-			end
-		else
-			table.insert(inner, bone)
-		end
-	end
-
-	return inner, edge
-end
-
-
---[[
-1-to-many bone links: a bone on one mesh -> list of matching bones on neighboring meshes
-At a straight seam, one bone links to one other
-At a corner where 4 meshes meet, one bone links to up to three others
-]]
-local BoneLinks: {[Bone]: {Bone}} = {}
-
+-- quick check
 if BaseMesh.Size.X ~= BaseMesh.Size.Z then
 	warn(`BaseMesh is not a square: {BaseMesh.Size.X},{BaseMesh.Size.Z}`)
 end
-local MeshSize = BaseMesh.Size.X
-local SeaFolder: Model = workspace:WaitForChild("Sea")
 
 
 
 
 --- / Local Functions /
+
+local function GetEdgeBones(mesh: MeshPart, bones: {Bone}): EdgeBones
+	local edge: EdgeBones = {minX = {}, maxX = {}, minZ = {}, maxZ = {}}
+
+	for _, bone in ipairs(bones) do
+		local edgeKeys = BoneEdgeMembership[bone.Name]
+		if edgeKeys then
+			-- corner bones get inserted into both their edge lists
+			for _, edgeKey in ipairs(edgeKeys) do
+				table.insert((edge :: any)[edgeKey], bone)
+			end
+		end
+	end
+
+	return edge
+end
 
 local function GetWindBiasedDirection(baseDir: {X: number, Z: number}): Vector2
 	local GlobalWind = conf.WIND
@@ -162,6 +159,7 @@ local function GetWindBiasedDirection(baseDir: {X: number, Z: number}): Vector2
 	return (Vector2.new(baseDir.X,baseDir.Z) + windDir * 0.6).Unit
 end
 
+--[[ old function
 local function GerstnerWave(wave: GerstnerWave, x: number, z: number, t: number): (number, number, number)
 	local biasedDir = GetWindBiasedDirection(wave.direction)
 	local k = (2 * math.pi) / wave.wavelength
@@ -175,13 +173,22 @@ local function GerstnerWave(wave: GerstnerWave, x: number, z: number, t: number)
 
 	return dx, dy, dz
 end
+]]
 
 local function CalculateWaves(x: number, z: number, t: number, distanceFromCamera: number): (number, number, number)
-	local fade = math.max(0, 1 - (distanceFromCamera / (conf.RENDER_DISTANCE * MeshSize)))
+	local fadeStart = (conf.RENDER_DISTANCE + conf.BORDER_BUFFER) * MeshSize / 2
+	local fadeEnd = (conf.RENDER_DISTANCE + conf.BORDER_BUFFER) * MeshSize
+	local fade = math.clamp(1 - ((distanceFromCamera - fadeStart) / (fadeEnd - fadeStart)), 0, 1)
 
 	local totalDX, totalDY, totalDZ = 0, 0, 0
-	for _, wave in ipairs(conf.WAVES) do
-		local dx, dy, dz = GerstnerWave(wave, x, z, t)
+	for i, wave in ipairs(PrecomputedWaves) do
+		local phase = wave.c * t
+		local f = wave.k * (wave.biasedWindDir.X * x + wave.biasedWindDir.Y * z) - phase
+		
+		local dx = wave.a * wave.biasedWindDir.X * math.cos(f)
+		local dy = wave.amplitude * math.sin(f)
+		local dz = wave.a * wave.biasedWindDir.Y * math.cos(f)
+		
 		totalDX += dx
 		totalDY += dy
 		totalDZ += dz
@@ -190,7 +197,7 @@ local function CalculateWaves(x: number, z: number, t: number, distanceFromCamer
 	return totalDX * fade, totalDY * fade, totalDZ * fade
 end
 
-local function GetMeshPos(mesh: MeshPart): Vector3
+local function GetMeshWorldPos(mesh: MeshPart): Vector3
 	return Vector3.new(
 		(Meshes[mesh].Coords.X * MeshSize) + (MeshSize / 2),
 		conf.SEA_LEVEL,
@@ -212,14 +219,13 @@ local function LinkNeighborBones(meshA: MeshPart, meshB: MeshPart)
 
 	local edgesA = {dataA.EdgeBones.minX, dataA.EdgeBones.maxX, dataA.EdgeBones.minZ, dataA.EdgeBones.maxZ}
 	local edgesB = {dataB.EdgeBones.minX, dataB.EdgeBones.maxX, dataB.EdgeBones.minZ, dataB.EdgeBones.maxZ}
-	
-	--task.wait()
+
 	for _, listA in ipairs(edgesA) do
 		for _, boneA in ipairs(listA) do
 			local worldPosA = posA + boneA.Position
 			for _, listB in ipairs(edgesB) do
 				for _, boneB in ipairs(listB) do
-					
+
 					if (worldPosA - (posB + boneB.Position)).Magnitude < LINK_THRESHOLD then
 						if not BoneLinks[boneA] then BoneLinks[boneA] = {} end
 						table.insert(BoneLinks[boneA], boneB)
@@ -288,7 +294,7 @@ end
 local function PoolMesh(mesh: MeshPart)
 	local meshData = Meshes[mesh]
 	if not meshData then return end
-	
+
 	UnlinkBones(mesh)
 	PooledMeshes[mesh] = {Bones = Meshes[mesh].Bones}
 	Meshes[mesh] = nil
@@ -307,7 +313,7 @@ local function GetMesh(): (MeshPart, {Bone})
 		m.Transparency = 0
 	else
 		m = BaseMesh:Clone()
-		m.Parent = SeaFolder
+		m.Parent = SeaModel
 		for _, obj in m:GetChildren() do
 			if obj:IsA("Bone") then
 				table.insert(bones, obj)
@@ -316,42 +322,16 @@ local function GetMesh(): (MeshPart, {Bone})
 	end
 
 	assert(m)
+	
+	
+	
 	if not conf.DEBUG then m.Color = Color3.fromRGB(25, 60, 90) end
 	return m, bones
 end
 
---- / Fake horizon /
---[[
-A 4-part static "picture frame" at SEA_LEVEL that surrounds the live skinned sea. It never
-animates (zero bone cost) and is only resized / repositioned when the camera crosses into a
-new chunk. Its inner hole is aligned to the OUTER edge of the generated mesh block so the two
-tile seamlessly; CalculateWaves already fades the rendered water to flat SEA_LEVEL at that
-boundary, so the join is geometrically continuous. The outer edges are meant to terminate
-inside fog / atmosphere rather than be seen directly
-]]
-local MAX_PART_SIZE = 2048 -- (studs) Roblox per-axis Part size limit
-local HORIZON_EXTENT = 3000 -- (studs) how far each frame strip reaches outward (clamped to fit MAX_PART_SIZE)
-local HORIZON_THICKNESS = 1 -- (studs) vertical thickness of the frame slabs
-local HORIZON_COLOR = Color3.fromRGB(25, 60, 90)   -- matches the runtime sea colour
-local HORIZON_MATERIAL = Enum.Material.SmoothPlastic
-
-local HorizonParts: {Part} = {}
-local lastHorizonChunkX: number? = nil
-local lastHorizonChunkZ: number? = nil
-
-local function CreateHorizonPart(): Part
-	local p = Instance.new("Part")
-	p.Anchored = true
-	p.CanCollide = false
-	p.CanQuery = false
-	p.CanTouch = false
-	p.CastShadow = false
-	p.Locked = true
-	p.TopSurface = Enum.SurfaceType.Smooth
-	p.BottomSurface = Enum.SurfaceType.Smooth
-	p.Material = HORIZON_MATERIAL
-	p.Color = HORIZON_COLOR
-	p.Parent = SeaFolder
+local function CreateHorizonPart(): MeshPart
+	local p = BaseHorizonPart:Clone()
+	p.Parent = SeaModel
 	return p
 end
 
@@ -404,13 +384,12 @@ local function UpdateHorizon(centerChunkX: number, centerChunkZ: number)
 end
 
 local function IsMeshVisible(mesh: MeshPart, camera: Camera): boolean
-	local half = MeshSize / 2
-	local pos = GetMeshPos(mesh)
+	local pos = GetMeshWorldPos(mesh)
 	local camPos = camera.CFrame.Position
 	local studRenderDist = conf.RENDER_DISTANCE * MeshSize
-	
-	if math.abs(camPos.X - pos.X) < half
-		and math.abs(camPos.Z - pos.Z) < half
+
+	if math.abs(camPos.X - pos.X) < HalfMeshSize
+		and math.abs(camPos.Z - pos.Z) < HalfMeshSize
 		and (pos - camPos).Magnitude < studRenderDist then
 		if conf.DEBUG then mesh.Color = Color3.new(0, 1, 1) end
 		VisibleMeshes[mesh] = true
@@ -418,10 +397,10 @@ local function IsMeshVisible(mesh: MeshPart, camera: Camera): boolean
 	end
 
 	local corners = {
-		Vector3.new(pos.X - half, pos.Y, pos.Z - half),
-		Vector3.new(pos.X + half, pos.Y, pos.Z - half),
-		Vector3.new(pos.X - half, pos.Y, pos.Z + half),
-		Vector3.new(pos.X + half, pos.Y, pos.Z + half),
+		Vector3.new(pos.X - HalfMeshSize, pos.Y, pos.Z - HalfMeshSize),
+		Vector3.new(pos.X + HalfMeshSize, pos.Y, pos.Z - HalfMeshSize),
+		Vector3.new(pos.X - HalfMeshSize, pos.Y, pos.Z + HalfMeshSize),
+		Vector3.new(pos.X + HalfMeshSize, pos.Y, pos.Z + HalfMeshSize),
 	}
 	for _, corner in ipairs(corners) do
 		local screenPoint: Vector3, visible = camera:WorldToViewportPoint(corner)
@@ -432,7 +411,6 @@ local function IsMeshVisible(mesh: MeshPart, camera: Camera): boolean
 		end
 	end
 
-	--if conf.DEBUG then mesh.Color = Color3.new(1, 0, 0) end
 	VisibleMeshes[mesh] = nil
 	return false
 end
@@ -442,21 +420,21 @@ local function IsMeshBorder(mesh: MeshPart): boolean
 	local Z: number = Meshes[mesh].Coords.Z
 
 	if VisibleMeshes[mesh] then return false end
-	
+
 	for i= -1, 1 do
 		for j= -1, 1 do
-			
+
 			if i == 0 and j == 0 then
 				continue
 			end
-			
+
 			if Chunks[X + i] and Chunks[X + i][Z + j] and VisibleMeshes[Chunks[X + i][Z + j]] then
 				if conf.DEBUG then mesh.Color = Color3.new(1, 1, 0) end
 				return true
 			end
 		end
 	end
-	
+
 	--directly adjacect version (no diagonals)
 	--[=[
 	if Chunks[X] then
@@ -476,7 +454,7 @@ local function IsMeshBorder(mesh: MeshPart): boolean
 	end
 
 	]=]
-	
+
 	if conf.DEBUG then mesh.Color = Color3.new(1, 0, 0) end
 	return false
 end
@@ -530,23 +508,22 @@ function WavesModule.GenerateMeshes(GenerateAtPos: Vector3)
 
 			local newMesh, newBones = GetMesh()
 			newMesh.Position = Vector3.new(posX, conf.SEA_LEVEL, posZ)
-			
+
 			--classify bones for edge propagation
-			local innerBones, edgeBones = ClassifyBones(newMesh, newBones)
+			local edgeBones = GetEdgeBones(newMesh, newBones)
 			Meshes[newMesh] = {
 				Bones = newBones,
-				InnerBones = innerBones,
 				EdgeBones = edgeBones,
 				Coords = {X = chunkX, Z = chunkZ},
 			}
 			Chunks[chunkX][chunkZ] = newMesh
-			
+
 			--link bones
 			if conf.EDGE_PROPAGATION then
 				for offsetX = -1, 1 do
 					for offsetY = -1, 1 do
 						if offsetX == 0 and offsetY == 0 then continue end
-						
+
 						local neighborMesh = Chunks[chunkX + offsetX] and Chunks[chunkX + offsetX][chunkZ + offsetY]
 						if neighborMesh then
 							LinkNeighborBones(newMesh, neighborMesh)
@@ -554,11 +531,11 @@ function WavesModule.GenerateMeshes(GenerateAtPos: Vector3)
 					end
 				end
 			end
-			
+
 		end
 	end
 
-	-- Keep the fake horizon framing the generated block (no-ops unless the chunk changed)
+	-- Keep the fake horizon framing the generated block
 	UpdateHorizon(PosGridX, PosGridZ)
 end
 
@@ -585,10 +562,10 @@ function WavesModule.RenderWaves()
 	for mesh in Meshes do
 		IsMeshVisible(mesh, camera)
 	end
-
+	
 	-- Pass 2: Determine which meshes update this frame
 	-- Use chunk coord delta instead of mesh.Position reads
-	local UpdatingThisFrame: {[MeshPart]: boolean} = {}
+	table.clear(UpdatingThisFrame)
 	for mesh, meshData in Meshes do
 		local cx = meshData.Coords.X
 		local cz = meshData.Coords.Z
@@ -607,13 +584,13 @@ function WavesModule.RenderWaves()
 			UpdatingThisFrame[mesh] = (CurrentUpdateCycle % interval == 0)
 		end
 	end
-
-	-- Pass 3: Animate using cached local positions (no WorldPosition calls now)
+	
+	-- Pass 3: Animate using cached local positions
 	for mesh, meshData in Meshes do
 		if not UpdatingThisFrame[mesh] then continue end
 
 		local shouldAnimate = VisibleMeshes[mesh] or IsMeshBorder(mesh)
-		local meshPos = GetMeshPos(mesh)
+		local meshPos = GetMeshWorldPos(mesh)
 
 		if shouldAnimate then
 			for i, bone in ipairs(meshData.Bones) do
@@ -627,7 +604,7 @@ function WavesModule.RenderWaves()
 				bone.Transform = CFrame.identity
 			end
 		end
-		
+
 		--[[
 		Propagate edge bone transforms to linked neighbors after updating,
 		whether animated or reset. This keeps seams (including 4-mesh corners) in
@@ -646,10 +623,42 @@ end
 
 function WavesModule.GetWaterHeightAtPos(xPos: number, zPos:number): number
 	local t = workspace:GetServerTimeNow()
-	
-	local dx, dy, dz = CalculateWaves(xPos, zPos, t, 0)
+
+	--[[
+	Gerstner waves move points sideways as well as up/down, so the vertex that actually sits
+	above (xPos, zPos) is NOT the one whose REST position is (xPos, zPos). Invert the horizontal
+	displacement with a few fixed-point steps to find the right one. Converges quickly while the
+	combined steepness stays below ~1; above that the surface self-intersects and is multivalued
+	]]
+	local gx, gz = xPos, zPos
+	for _ = 1, 4 do
+		local dx, _, dz = CalculateWaves(gx, gz, t, 0)
+		gx += xPos - (gx + dx)
+		gz += zPos - (gz + dz)
+	end
+
+	local _, dy = CalculateWaves(gx, gz, t, 0)
 	return dy + conf.SEA_LEVEL
 end
+
+function WavesModule.RecomputeWaves()
+	table.clear(PrecomputedWaves)
+
+	for _, wave in ipairs(conf.WAVES) do
+		local k = (2 * math.pi) / wave.wavelength
+		local c = math.sqrt(9.8 / k) * wave.speed
+		local a = wave.steepness / k
+
+		table.insert(PrecomputedWaves, {
+			biasedWindDir = GetWindBiasedDirection(wave.direction),
+			k = k,
+			c = c,
+			a = a,
+			amplitude = wave.amplitude
+		})
+	end
+end
+WavesModule.RecomputeWaves() --trigger at least once to set up variables
 
 --[[
 Applies a quality preset (or any partial settings table) onto the live config.
@@ -680,7 +689,9 @@ function WavesModule.ApplySettings(settings: WaveQualitySettings): boolean
 	if settings.LOWERED_RENDER_RATE_DISTANCE ~= nil then conf.LOWERED_RENDER_RATE_DISTANCE = settings.LOWERED_RENDER_RATE_DISTANCE end
 	if settings.RENDER_RATE_FALLOFF ~= nil then conf.RENDER_RATE_FALLOFF = settings.RENDER_RATE_FALLOFF end
 	if settings.EDGE_PROPAGATION ~= nil then conf.EDGE_PROPAGATION = settings.EDGE_PROPAGATION end
-
+	
+	WavesModule.RecomputeWaves()
+	
 	return needsReset
 end
 
