@@ -65,7 +65,7 @@ All settings are stored on the module table and can be edited at the top of `Wav
 
 | Setting | Type | Description |
 | --- | --- | --- |
-| `DEBUG` | `boolean` | Tints tiles by state to help debug streaming. (green = visible / yellow = border / red = culled) |
+| `DEBUG` | `boolean` | Tints tiles by state to help debug streaming. (blue = visible / yellow = border / green = propagating edges / red = culled) |
 | `WIND` | `Vector3` | Global wind; biases every wave's direction (the XZ components are used). |
 | `SEA_LEVEL` | `number` | World `Y` the ocean rests at. |
 | `RENDER_DISTANCE` | `number` (chunks) | Radius of fully rendered & animated tiles. Also the radius over which waves fade to flat. |
