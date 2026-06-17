@@ -2,7 +2,7 @@
 
 <img img align="left" width="272" height="245" alt="iQr181780868483" src="https://github.com/user-attachments/assets/a6c85a39-9c14-4eb7-acf8-0dde473328cd" />
 
-This module simulates an effectively infinite ocean by dynamically placing skinned meshes around the player's camera and moving the bones of those meshes with a **[Gerstner / trochoidal](https://en.wikipedia.org/wiki/Trochoidal_wave)** wave equation to produce realistic, rolling waves. It streams mesh tiles in and out as the player travels, keeps the part count roughly constant, and scales its cost to the player's graphics-quality setting.
+This **open-source** module simulates an effectively infinite ocean by dynamically placing skinned meshes around the player's camera and moving the bones of those meshes with a **[Gerstner / trochoidal](https://en.wikipedia.org/wiki/Trochoidal_wave)** wave equation to produce realistic, rolling waves. It streams mesh tiles in and out as the player travels, keeps the part count roughly constant, and scales its cost to the player's graphics-quality setting.
 
 **Showcase game:** https://www.roblox.com/games/86081630361588/M-E-O-W
 > What does M.E.O.W. stand for? **M**odule for **E**oA's **O**ptimized **W**aves, lol. I made this module for the Roblox game Echoes of Arcania, which I am also currently developing (as of 2026-06-07).
