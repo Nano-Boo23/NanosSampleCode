@@ -49,8 +49,8 @@ Along with the base behavior, I used several different techniques to imrpove the
 
 - **Visibility culling**: only meshes on screen (specifically, any mesh with at least 1 corner visible) are animated; the rest are skipped.
 - **Neighbouring mesh animation**: meshes just off-screen that border a visible tile still animate, so you never see a flat mesh right on the edge of your screen. By default the border test checks the four orthogonal neighbours; turning on `DIAGONAL_BORDERS` extends it to the diagonals too (8-way), so corner tiles touching a visible one are kept animated as well.
-- **Update-rate falloff**: tiles within `RENDER_DISTANCE` update every frame, while the ones past `RENDER_DISTANCE + LOWERED_RENDER_RATE_DISTANCE` have their update rate dropped off with distance (controlled by `RENDER_RATE_FALLOFF`).
-- **Edge propagation**: coincident edge bones between neighbouring tiles are linked, so a tile that gets skipped on a given frame still has its seam pulled into alignment by its animated neighbour, preventing visible tearing. Propagation only runs across seams where one side updated this frame and the other didn't (the rate-falloff boundaries) — the interior, where both sides already evaluate the same wave at the same spot and match, is skipped. That keeps the cost proportional to the seam length rather than the tile count. It's still the heaviest LOD feature, so it's only enabled at the highest quality levels.
+- **Update-rate falloff**: tiles within `RENDER_DISTANCE` update every frame, while the ones past `LOWERED_RENDER_RATE_DISTANCE` have their update rate dropped off with distance (controlled by `RENDER_RATE_FALLOFF`).
+- **Edge propagation**: coincident edge bones between neighbouring tiles are linked, so a tile that gets skipped on a given frame still has its seam pulled into alignment by its animated neighbour, preventing visible tearing. Propagation only runs across seams where one side updated this frame and the other didn't (the rate-falloff boundaries). It's still the heaviest LOD feature, so it's only enabled at the highest quality levels.
 - **Fake horizon**: a static four-part "fan" of flat parts that sits at `SEA_LEVEL` and surrounds the live water meshes. It basically does not have any performance impact, since it doesn't have any bones and is always static (unless the player moves). Its inner edge lines up with the outer edge of the generated tiles, and because the waves already fade flat at the render edge, the join is seamless. Its far edges are meant to disappear into fog/atmosphere.
 
 ### Buoyancy
@@ -69,7 +69,7 @@ All settings are stored on the module table and can be edited at the top of `Wav
 | `WIND` | `Vector3` | Global wind; biases every wave's direction (the XZ components are used). |
 | `SEA_LEVEL` | `number` | World `Y` the ocean rests at. |
 | `RENDER_DISTANCE` | `number` (chunks) | Radius of fully rendered & animated tiles. Also the radius over which waves fade to flat. |
-| `LOWERED_RENDER_RATE_DISTANCE` | `number` (chunks) | Tiles within this update every frame; beyond it, updates thin out. |
+| `LOWERED_RENDER_RATE_DISTANCE` | `number` (chunks) | Tiles within this update every frame; beyond it, updates for that mesh pause for `RENDER_RATE_FALLOFF * distance past this setting`. |
 | `RENDER_RATE_FALLOFF` | `number` | How quickly update frequency drops with distance past the full-rate zone (higher = cheaper, choppier far away). |
 | `BORDER_BUFFER` | `number` (chunks) | Extra ring of tiles generated past `RENDER_DISTANCE` so the visible edge has neighbours to blend against. The fake horizon covers everything beyond it. |
 | `EDGE_PROPAGATION` | `boolean` | Links coincident edge bones between tiles to prevent seam tearing. More accurate, but heavier. |
@@ -97,7 +97,7 @@ More layers = more detail, but more calculation cost. Because `GetWaterHeightAtP
 
 ## Quality presets
 
-In the showcase game I also implemented sea quality presets (`q1`–`q10`, defined in `SettingPresets`) that are applied depending on the player's current quality level. "Automatic" quality falls back to a sensible mid-high level.
+In the showcase game I also implemented sea quality presets (`q1`–`q10`, defined in `SettingPresets`) that are applied depending on the player's current quality level. "Automatic" quality currently falls back to quality 7.
 <img width="802" height="110" alt="image" src="https://github.com/user-attachments/assets/2032e5eb-8852-456c-884c-a87d0e1df870" />
 
 Each preset tunes the render / update / distance levers, with the mid tiers switching on `DIAGONAL_BORDERS` and the top tiers also enabling `EDGE_PROPAGATION`. `WIND`, `SEA_LEVEL`, and `WAVES` are deliberately left alone so the **simulated surface height stays the same on every client** no matter their quality.
@@ -112,7 +112,7 @@ Each preset tunes the render / update / distance levers, with the mid tiers swit
 | `RenderWaves()` | – | Animate the waves for this frame. |
 | `ResetMeshes()` | – | Pool every tile so they rebuild from scratch. |
 | `GetWaterHeightAtPos(x, z)` | `number` | Surface `Y` at a world XZ position (buoyancy). |
-| `ApplySettings(settings)` | – | Apply a quality preset or partial settings table. Copies the known render / update / border keys onto the live config and, when `EDGE_PROPAGATION` is switched on, relinks the seam bones in place — so it no longer needs a follow-up `ResetMeshes()`. Takes effect on the next `GenerateMeshes` / `RenderWaves` call. |
+| `ApplySettings(settings)` | – | Apply a quality preset or partial settings table onto the live settings. Takes effect on the next `GenerateMeshes` / `RenderWaves` call. |
 
 ---
 
@@ -122,7 +122,7 @@ Each preset tunes the render / update / distance levers, with the mid tiers swit
 ReplicatedStorage
 ├── WavesModule        (ModuleScript)    ← this module
 │   ├── SeaMesh        (MeshPart)        ← the skinned ocean tile
-│   └── HorizonMesh    (MeshPart)        ← a boneless mesh with a SurfaceAppearance child
+│   └── HorizonMesh    (MeshPart)        ← a boneless mesh with a SurfaceAppearance child (I used a mesh part because they can have SurfaceAppearance)
 └── SettingPresets     (ModuleScript)    ← quality presets q1–q10
 
 Workspace
@@ -159,6 +159,7 @@ Since Roblox limits the game description to 1000 characters, here's the full upd
 - **v1.3**: Added Gerstner wave visualization panel (a 2D slice of the combined 3D waves).
 - **v1.2**: Added Gerstner/sinusoidal wave configuration panel with an integrated graph of the current wave's equation.
 - **v1.1**: Added a tab option to modify the current wave equations.
+- **v1.0**: Released module to the public.
 
 ---
 
