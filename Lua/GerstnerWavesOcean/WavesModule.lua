@@ -72,7 +72,7 @@ type PooledMeshes = {[MeshPart]: {Bones: {Bone}, EdgeBones: EdgeBones}}
 
 --- / Variables /
 local BaseMesh: MeshPart = script:WaitForChild("SeaMesh")
-local BaseHorizonPart: MeshPart = script:WaitForChild("HorizonPart")
+local BaseHorizonMesh: MeshPart = script:WaitForChild("HorizonMesh")
 local SeaModel: Model = workspace:WaitForChild("Sea")
 local CurrentUpdateCycle = 0
 local MeshSize = BaseMesh.Size.X
@@ -333,7 +333,7 @@ local function GetMesh(): (MeshPart, {Bone}, EdgeBones)
 end
 
 local function CreateHorizonPart(): MeshPart
-	local p = BaseHorizonPart:Clone()
+	local p = BaseHorizonMesh:Clone()
 	p.Parent = SeaModel
 	return p
 end
