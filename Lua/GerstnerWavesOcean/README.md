@@ -48,9 +48,9 @@ I also found this really cool [gerstner wave simulator](https://madblade.github.
 Along with the base behavior, I used several different techniques to imrpove the general experience of players:
 
 - **Visibility culling**: only meshes on screen (specifically, any mesh with at least 1 corner visible) are animated; the rest are skipped.
-- **Neighbouring mesh animation**: meshes just off-screen that border a visible tile still animate, so you never see a flat mesh right on the edge of your screen.
+- **Neighbouring mesh animation**: meshes just off-screen that border a visible tile still animate, so you never see a flat mesh right on the edge of your screen. By default the border test checks the four orthogonal neighbours; turning on `DIAGONAL_BORDERS` extends it to the diagonals too (8-way), so corner tiles touching a visible one are kept animated as well.
 - **Update-rate falloff**: tiles within `RENDER_DISTANCE` update every frame, while the ones past `RENDER_DISTANCE + LOWERED_RENDER_RATE_DISTANCE` have their update rate dropped off with distance (controlled by `RENDER_RATE_FALLOFF`).
-- **Edge propagation**: coincident edge bones between neighbouring tiles are linked so a skipped tile still keeps its seam aligned with its animated neighbour, preventing visible tearing. It's accurate but costs more, so it's only enabled at the highest quality levels.
+- **Edge propagation**: coincident edge bones between neighbouring tiles are linked, so a tile that gets skipped on a given frame still has its seam pulled into alignment by its animated neighbour, preventing visible tearing. Propagation only runs across seams where one side updated this frame and the other didn't (the rate-falloff boundaries) — the interior, where both sides already evaluate the same wave at the same spot and match, is skipped. That keeps the cost proportional to the seam length rather than the tile count. It's still the heaviest LOD feature, so it's only enabled at the highest quality levels.
 - **Fake horizon**: a static four-part "fan" of flat parts that sits at `SEA_LEVEL` and surrounds the live water meshes. It basically does not have any performance impact, since it doesn't have any bones and is always static (unless the player moves). Its inner edge lines up with the outer edge of the generated tiles, and because the waves already fade flat at the render edge, the join is seamless. Its far edges are meant to disappear into fog/atmosphere.
 
 ### Buoyancy
@@ -73,6 +73,7 @@ All settings are stored on the module table and can be edited at the top of `Wav
 | `RENDER_RATE_FALLOFF` | `number` | How quickly update frequency drops with distance past the full-rate zone (higher = cheaper, choppier far away). |
 | `BORDER_BUFFER` | `number` (chunks) | Extra ring of tiles generated past `RENDER_DISTANCE` so the visible edge has neighbours to blend against. The fake horizon covers everything beyond it. |
 | `EDGE_PROPAGATION` | `boolean` | Links coincident edge bones between tiles to prevent seam tearing. More accurate, but heavier. |
+| `DIAGONAL_BORDERS` | `boolean` | When an off-screen tile is tested for bordering a visible one, also check the four diagonal neighbours (8-way) instead of only the four orthogonal ones (4-way). Catches corner seams for a small extra cost. |
 | `WAVES` | `array` | The Gerstner wave layers (see below). |
 
 ### Wave layers (`WAVES`)
@@ -96,10 +97,10 @@ More layers = more detail, but more calculation cost. Because `GetWaterHeightAtP
 
 ## Quality presets
 
-In the showcase game I also implemented some sea quality level presets that are applied depending on the player's current quality level. "Automatic" quality falls back to a sensible mid-high level.
+In the showcase game I also implemented sea quality presets (`q1`–`q10`, defined in `SettingPresets`) that are applied depending on the player's current quality level. "Automatic" quality falls back to a sensible mid-high level.
 <img width="802" height="110" alt="image" src="https://github.com/user-attachments/assets/2032e5eb-8852-456c-884c-a87d0e1df870" />
 
-These presets only touch the render / update / distance settings. `WIND`, `SEA_LEVEL`, and `WAVES` are deliberately left alone so the **simulated surface height stays the same on every client** no matter their quality.
+Each preset tunes the render / update / distance levers, with the mid tiers switching on `DIAGONAL_BORDERS` and the top tiers also enabling `EDGE_PROPAGATION`. `WIND`, `SEA_LEVEL`, and `WAVES` are deliberately left alone so the **simulated surface height stays the same on every client** no matter their quality.
 
 ---
 
@@ -111,7 +112,7 @@ These presets only touch the render / update / distance settings. `WIND`, `SEA_L
 | `RenderWaves()` | – | Animate the waves for this frame. |
 | `ResetMeshes()` | – | Pool every tile so they rebuild from scratch. |
 | `GetWaterHeightAtPos(x, z)` | `number` | Surface `Y` at a world XZ position (buoyancy). |
-| `ApplySettings(settings)` | `boolean` | Apply a quality preset; `true` if a `ResetMeshes()` is needed. |
+| `ApplySettings(settings)` | – | Apply a quality preset or partial settings table. Copies the known render / update / border keys onto the live config and, when `EDGE_PROPAGATION` is switched on, relinks the seam bones in place — so it no longer needs a follow-up `ResetMeshes()`. Takes effect on the next `GenerateMeshes` / `RenderWaves` call. |
 
 ---
 
@@ -130,7 +131,7 @@ Workspace
 
 ### Using your own mesh
 
-I identified that bones named 0,1,2,3 are the corner bones, and that names up to 39 (included) are edge bones. I'm using this knowledge for an incredibly fast but hard-coded relative bone position lookup. If you want to use my infrastructure, you'll have to re-map `EDGE_NAMES` in `WavesModule`. You can quickly check your own mesh corners / edges with this command:
+I identified that bones named 0,1,2,3 are the corner bones, and that names up to 39 (included) are edge bones. I'm using this knowledge for an incredibly fast but hard-coded relative bone position lookup. If you want to use my infrastructure, you'll have to re-map `BoneEdgeOwnership` in `WavesModule`. You can quickly check your own mesh corners / edges with this command:
 ```lua
 for _, bone in ipairs(workspace.YourMesh:GetDescendants()) do
     if bone:IsA("Bone") then
@@ -146,6 +147,8 @@ end
 
 Since Roblox limits the game description to 1000 characters, here's the full update log, most recent first:
 
+- **v1.12**: Added a `DIAGONAL_BORDERS` toggle (8-neighbour border detection for corner seams) and refreshed the q1–q10 quality presets.
+- **v1.11**: Reworked edge propagation to only refresh rate-transition seams, further optimized `RenderWaves`, and made `ApplySettings` relink seam bones in place so toggling edge propagation no longer requires a `ResetMeshes()`.
 - **v1.10**: Heavily optimized mesh generation.
 - **v1.9**: Optimized wave computation phase and cleaned up code.
 - **v1.8**: Added presets for every roblox quality level. Added a fake horizon to better give an illusion of an infinite ocean. Adapted UI for smaller devices.
