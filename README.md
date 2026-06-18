@@ -13,3 +13,18 @@ You can contact me on discord if you want to talk about anything: @Nano_Boo
 This portfolio serves as a collection of selective work that I have decided to showcase, including the source code of partial or full programs / systems alongside a README file for each project, detailing my work, giving context on why and what it was made for, and usually **including images or videos**. <br>
 
 The code was taken directly from the scripts with no special editing, also including my original comments. So what you see here is how you can expect my work to look like; script organization, comments, variable naming, type checking, etc.
+
+## My code commenting & variable naming quirks
+This section is mostly for those who are here to read my scripts. <br>
+After a long time of indecisiveness and a lot of variations in how I visually structure my code, these are the habits I've settled on: <br>
+- I separate sections of code with `-- / Section /`, for example `-- / Services /` or `--/ Variable setup /` <br>
+- I try to name my functions as VerbNoun(...) or similar <br>
+- I tend to use longer, more descriptive variable names over shorter names (but when doing math-heavy sections I usually use short names for convenience) <br>
+- I add a lot of comments to my code, both formal and informal, in case someone ever reads it <br>
+- My naming convention for variables is (usually) as follows:
+
+| Case style | Usage |
+| --- | --- |
+| SCREAMING_SNAKE_CASE | Settings |
+| PascalCase | Global variables |
+| camelCase | Scoped variables |
