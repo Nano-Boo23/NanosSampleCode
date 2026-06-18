@@ -18,9 +18,10 @@ conf.DEBUG = false
 conf.WIND = Vector3.new(-10,0,10) --northeast
 conf.SEA_LEVEL = 50 --(studs) at what Y level the mesh will generate at
 conf.RENDER_DISTANCE = 2 --(chunks) the spherical radius that determines skinned mesh generation and rendering around the camera.
-conf.LOWERED_RENDER_RATE_DISTANCE = 2 --(chunks) after what chunk the vertices get updated with less frequency
+conf.LOWERED_RENDER_RATE_DISTANCE = 2 --(chunks) after what chunk the vertices get updated with less frequency (ex: if 2 then distance 3 has lowered updates)
 conf.RENDER_RATE_FALLOFF = 5 -- how many less updates a chunk gets proportional to current distance
 conf.EDGE_PROPAGATION = false --propagates the positions of edge bones to adjacent meshes to prevent visible mesh tearing (not performance friendly though)
+conf.DIAGONAL_BORDERS = true --should IsMeshBorder() check corners of meshes?
 conf.BORDER_BUFFER = 1 --(chunks) extra ring of meshes generated just beyond RENDER_DISTANCE.
 
 conf.WAVES = {
@@ -40,6 +41,7 @@ type WaveQualitySettings = {
 	LOWERED_RENDER_RATE_DISTANCE: number?,
 	RENDER_RATE_FALLOFF: number?,
 	EDGE_PROPAGATION: boolean?,
+	DIAGONAL_BORDERS: boolean?,
 }
 
 type GerstnerWave = {
@@ -90,7 +92,8 @@ local lastHorizonChunkX: number? = nil
 local lastHorizonChunkZ: number? = nil
 local OriginalMeshColor = BaseMesh.Color
 local StudRenderDist = conf.RENDER_DISTANCE * MeshSize --non nil init
-local BoneUpdates:{[Bone]: CFrame} = {}
+local BonesToUpdate:{Bone} = {}		 -- v (see below)
+local BoneCFramesToSet:{CFrame} = {} --parallel integer arrays (faster to iterate through than an instance-keyed map {[Bone]: CFrame})
 local ShouldAnimate:{[MeshPart]: boolean} = {}
 
 --mapping to reduce needed calculations and lookups. :GetChildren()'s order is consistent, as long as we dont add instances. (which we dont)
@@ -230,6 +233,22 @@ local function LinkNeighborBones(meshA: MeshPart, meshB: MeshPart)
 					table.insert(la, boneB)
 					local lb = BoneLinks[boneB]; if not lb then lb = {}; BoneLinks[boneB] = lb end
 					table.insert(lb, boneA)
+				end
+			end
+		end
+	end
+end
+
+local function RelinkAllBones()
+	table.clear(BoneLinks)
+	for mesh, data in Meshes do
+		local cx, cz = data.Coords.X, data.Coords.Z
+		for ox = -1, 1 do
+			for oz = -1, 1 do
+				if ox == 0 and oz == 0 then continue end
+				local neighbor = Chunks[cx + ox] and Chunks[cx + ox][cz + oz]
+				if neighbor then
+					LinkNeighborBones(mesh, neighbor)
 				end
 			end
 		end
@@ -419,36 +438,41 @@ local function IsMeshBorder(mesh: MeshPart): boolean
 	local Z: number = Meshes[mesh].Coords.Z
 
 	if VisibleMeshes[mesh] then return false end
+	
+	--directly adjacent + diagonals version (8 total checks)
+	if conf.DIAGONAL_BORDERS then
+	
+		for i= -1, 1 do
+			for j= -1, 1 do
 
-	for i= -1, 1 do
-		for j= -1, 1 do
+				if i == 0 and j == 0 then
+					continue
+				end
 
-			if i == 0 and j == 0 then
-				continue
+				if Chunks[X + i] and Chunks[X + i][Z + j] and VisibleMeshes[Chunks[X + i][Z + j]] then
+					return true
+				end
 			end
-
-			if Chunks[X + i] and Chunks[X + i][Z + j] and VisibleMeshes[Chunks[X + i][Z + j]] then
+		end
+	
+	
+	else --directly adjacent version (4 total checks)
+		
+		if Chunks[X] then
+			if (Chunks[X][Z - 1] and VisibleMeshes[Chunks[X][Z - 1]])
+				or (Chunks[X][Z + 1] and VisibleMeshes[Chunks[X][Z + 1]]) then
 				return true
 			end
 		end
-	end
-
-	--directly adjacect version (no diagonals) (documentation purposes)
-	--[=[
-	if Chunks[X] then
-		if (Chunks[X][Z - 1] and VisibleMeshes[Chunks[X][Z - 1]])
-			or (Chunks[X][Z + 1] and VisibleMeshes[Chunks[X][Z + 1]]) then
+		if Chunks[X - 1] and Chunks[X - 1][Z] and VisibleMeshes[Chunks[X - 1][Z]] then
 			return true
 		end
+		if Chunks[X + 1] and Chunks[X + 1][Z] and VisibleMeshes[Chunks[X + 1][Z]] then
+			return true
+		end
+		
 	end
-	if Chunks[X - 1] and Chunks[X - 1][Z] and VisibleMeshes[Chunks[X - 1][Z]] then
-		return true
-	end
-	if Chunks[X + 1] and Chunks[X + 1][Z] and VisibleMeshes[Chunks[X + 1][Z]] then
-		return true
-	end
-
-	]=]
+	
 
 	return false
 end
@@ -502,7 +526,8 @@ function WavesModule.GenerateMeshes(GenerateAtPos: Vector3)
 				local dz = worldPosZ - GenerateAtPos.Z
 				if dx * dx + dz * dz > fakeDistSq then continue end
 			end
-
+			
+			debug.profilebegin("PLACING NEW MESH")
 			local newMesh, newBones, newEdgeBones = GetMesh()
 			newMesh.Position = Vector3.new(worldPosX, conf.SEA_LEVEL, worldPosZ)
 
@@ -518,9 +543,11 @@ function WavesModule.GenerateMeshes(GenerateAtPos: Vector3)
 				)
 			}
 			Chunks[chunkX][chunkZ] = newMesh
+			debug.profileend()
 
 			--link bones
 			if conf.EDGE_PROPAGATION then
+				debug.profilebegin("LINKING NEIGHBOR BONES")
 				for offsetX = -1, 1 do
 					for offsetZ = -1, 1 do
 						if offsetX == 0 and offsetZ == 0 then continue end
@@ -531,6 +558,7 @@ function WavesModule.GenerateMeshes(GenerateAtPos: Vector3)
 						end
 					end
 				end
+				debug.profileend()
 			end
 
 		end
@@ -564,7 +592,7 @@ function WavesModule.RenderWaves()
 	if not camera then return end
 	local camPos = camera.CFrame.Position
 
-	-- Precompute camera chunk coords once for Pass 2 distance checks
+	-- Camera chunk coords
 	local camChunkX = math.round((camPos.X - HalfMeshSize) / MeshSize)
 	local camChunkZ = math.round((camPos.Z - HalfMeshSize) / MeshSize)
 	
@@ -602,7 +630,8 @@ function WavesModule.RenderWaves()
 	
 	-- Pass 2: Animate using cached local positions
 	debug.profilebegin("CALCULATING BONE POS")
-	table.clear(BoneUpdates)
+	table.clear(BonesToUpdate)
+	table.clear(BoneCFramesToSet)
 	table.clear(ShouldAnimate)
 	local fadeStart = (conf.RENDER_DISTANCE + conf.BORDER_BUFFER) * HalfMeshSize
 	local fadeEnd = (conf.RENDER_DISTANCE + conf.BORDER_BUFFER) * MeshSize
@@ -618,7 +647,8 @@ function WavesModule.RenderWaves()
 				local dist = (camPos - worldPos).Magnitude
 				local fade = math.clamp(1 - ((dist - fadeStart) / (fadeEnd - fadeStart)), 0, 1)
 				local dx, dy, dz = CalculateWaves(worldPos.X, worldPos.Z)
-				BoneUpdates[bone] = CFrame.new(dx * fade, dy * fade, dz * fade)
+				table.insert(BonesToUpdate, bone)
+				table.insert(BoneCFramesToSet, CFrame.new(dx * fade, dy * fade, dz * fade))
 			end
 		end
 		
@@ -632,7 +662,7 @@ function WavesModule.RenderWaves()
 	-- Pass 3: Apply bone updates
 	debug.profilebegin("SET BONE POS")
 	--set color if debug is true
-	if conf.DEBUG then
+	if conf.DEBUG and not conf.EDGE_PROPAGATION then
 		for mesh, _ in Meshes do
 			mesh.Color = if VisibleMeshes[mesh] then Color3.new(0,1,1)
 				elseif IsMeshBorder(mesh) then Color3.new(1,1,0)
@@ -640,8 +670,8 @@ function WavesModule.RenderWaves()
 		end
 	end
 	
-	for bone, cframe in BoneUpdates do
-		bone.Transform = cframe
+	for i=1, #BonesToUpdate do
+		BonesToUpdate[i].Transform = BoneCFramesToSet[i]
 	end
 	debug.profileend()
 	
@@ -649,8 +679,28 @@ function WavesModule.RenderWaves()
 	debug.profilebegin("PROPAGATION UPDATE")
 	if conf.EDGE_PROPAGATION then
 		for mesh, animate in ShouldAnimate do
-			if animate then
-				PropagateEdges(Meshes[mesh])
+			if conf.DEBUG then
+				mesh.Color = if VisibleMeshes[mesh] then Color3.new(0,1,1)
+					elseif IsMeshBorder(mesh) then Color3.new(1,1,0)
+					else Color3.new(1,0,0)
+			end
+			if not animate then continue end
+
+			local md = Meshes[mesh]
+			local cx, cz = md.Coords.X, md.Coords.Z
+			local cxRow, cxL, cxR = Chunks[cx], Chunks[cx-1], Chunks[cx+1]
+
+			-- 8-neighbourhood, since BoneLinks were built for all 8 (lines 536-545)
+			local function skipped(col, z)
+				local n = col and col[z]
+				return n ~= nil and not UpdatingThisFrame[n]
+			end
+			if skipped(cxRow, cz-1) or skipped(cxRow, cz+1)
+				or skipped(cxL, cz) or skipped(cxR, cz)
+				or skipped(cxL, cz-1) or skipped(cxL, cz+1)
+				or skipped(cxR, cz-1) or skipped(cxR, cz+1) then
+				PropagateEdges(md)
+				if conf.DEBUG then mesh.Color = mesh.Color:Lerp(Color3.new(0,1,0), 0.5) end
 			end
 		end
 	end
@@ -710,35 +760,33 @@ Applies a quality preset (or any partial settings table) onto the live config.
 Only known, safe-to-change-at-runtime keys are copied; anything else is ignored.
 Takes effect on the next GenerateMeshes / RenderWaves call.
 ]]
-function WavesModule.ApplySettings(settings: WaveQualitySettings)
-	if type(settings) ~= "table" then return end
+function WavesModule.ApplySettings(newSettings: WaveQualitySettings)
+	if type(newSettings) ~= "table" then return end
 
-	--[[
-	A reset is only needed when EDGE_PROPAGATION flips: bone links have to be (re)built
-	on the already-loaded meshes. Distance changes self-heal on the next GenerateMeshes
-	call, and the rate settings are read fresh every frame, so neither needs a reset
-	]]
-	local needsReset = settings.EDGE_PROPAGATION ~= nil
-		and settings.EDGE_PROPAGATION ~= conf.EDGE_PROPAGATION
+	local needsBoneRelinking =
+		newSettings.EDGE_PROPAGATION ~= nil and
+		conf.EDGE_PROPAGATION == false and
+		newSettings.EDGE_PROPAGATION == true
 
 	--[[
 	A render-distance change resizes the generated block (and so the horizon's inner hole),
 	so force the frame to rebuild on the next GenerateMeshes call
 	]]
-	if settings.RENDER_DISTANCE ~= nil and settings.RENDER_DISTANCE ~= conf.RENDER_DISTANCE then
+	if newSettings.RENDER_DISTANCE ~= nil and newSettings.RENDER_DISTANCE ~= conf.RENDER_DISTANCE then
 		lastHorizonChunkX = nil
 		lastHorizonChunkZ = nil
 	end
 
-	if settings.RENDER_DISTANCE ~= nil then conf.RENDER_DISTANCE = settings.RENDER_DISTANCE end
-	if settings.LOWERED_RENDER_RATE_DISTANCE ~= nil then conf.LOWERED_RENDER_RATE_DISTANCE = settings.LOWERED_RENDER_RATE_DISTANCE end
-	if settings.RENDER_RATE_FALLOFF ~= nil then conf.RENDER_RATE_FALLOFF = settings.RENDER_RATE_FALLOFF end
-	if settings.EDGE_PROPAGATION ~= nil then conf.EDGE_PROPAGATION = settings.EDGE_PROPAGATION end
+	if newSettings.RENDER_DISTANCE ~= nil then conf.RENDER_DISTANCE = newSettings.RENDER_DISTANCE end
+	if newSettings.LOWERED_RENDER_RATE_DISTANCE ~= nil then conf.LOWERED_RENDER_RATE_DISTANCE = newSettings.LOWERED_RENDER_RATE_DISTANCE end
+	if newSettings.RENDER_RATE_FALLOFF ~= nil then conf.RENDER_RATE_FALLOFF = newSettings.RENDER_RATE_FALLOFF end
+	if newSettings.EDGE_PROPAGATION ~= nil then conf.EDGE_PROPAGATION = newSettings.EDGE_PROPAGATION end
+	if newSettings.DIAGONAL_BORDERS ~= nil then conf.DIAGONAL_BORDERS = newSettings.DIAGONAL_BORDERS end
 	
 	WavesModule.RecomputeWaves()
 	
-	if needsReset then
-		WavesModule.ResetMeshes()
+	if needsBoneRelinking then
+		RelinkAllBones()
 	end
 end
 
