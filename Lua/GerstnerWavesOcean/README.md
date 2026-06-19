@@ -22,7 +22,7 @@ The module needs *something* to move. It uses a **skinned mesh**; a mesh with a 
 
 ### The main rendering functions
 
-To render the ocean, module exposes 2 functions:
+To render the ocean, the module exposes 2 functions:
 
 | Function | Call it… | What it does |
 | --- | --- | --- |
@@ -35,9 +35,9 @@ To render the ocean, module exposes 2 functions:
 
 ### Gerstner waves
 
-To put it simply, a Gerstner wave pushes surface points in a **circular orbit** rather than a simple up/down sine, which creates a more natural looking water. We create this wave by adding multiple waves on top of each other, defined in `WAVES`. I also biased these waves toward the global `WIND` direction.
+To put it simply, a Gerstner wave pushes surface points in a **circular orbit** rather than a simple up/down sine, which creates a more natural-looking water. We create this wave by adding multiple waves on top of each other, defined in `WAVES`. I also biased these waves toward the global `WIND` direction.
 
-I also found this really cool [gerstner wave simulator](https://madblade.github.io/waves-gerstner/) you can play with on your browser!
+I also found this really cool [Gerstner wave simulator](https://madblade.github.io/waves-gerstner/) you can play with on your browser!
 
 <img width="1920" height="631" alt="Trochoidal_wave svg" src="https://github.com/user-attachments/assets/8ce0f1b5-c18d-4e30-8beb-962ad0d4d1e8" />
 <img width="1920" height="auto" alt="Forces_in_Trochoidal_wave" src="https://github.com/user-attachments/assets/033ac309-11b4-4e4b-93c5-f16cab279e5d" />
@@ -45,7 +45,7 @@ I also found this really cool [gerstner wave simulator](https://madblade.github.
 
 ### Level of detail & performance
 
-Along with the base behavior, I used several different techniques to imrpove the general experience of players:
+Along with the base behavior, I used several different techniques to improve the general experience of players:
 
 - **Visibility culling**: only meshes on screen (specifically, any mesh with at least 1 corner visible) are animated; the rest are skipped.
 - **Neighbouring mesh animation**: meshes just off-screen that border a visible tile still animate, so you never see a flat mesh right on the edge of your screen. By default the border test checks the four orthogonal neighbours; turning on `DIAGONAL_BORDERS` extends it to the diagonals too (8-way), so corner tiles touching a visible one are kept animated as well.
@@ -151,7 +151,7 @@ Since Roblox limits the game description to 1000 characters, here's the full upd
 - **v1.11**: Reworked edge propagation to only refresh rate-transition seams, further optimized `RenderWaves`, and made `ApplySettings` relink seam bones in place so toggling edge propagation no longer requires a `ResetMeshes()`.
 - **v1.10**: Heavily optimized mesh generation.
 - **v1.9**: Optimized wave computation phase and cleaned up code.
-- **v1.8**: Added presets for every roblox quality level. Added a fake horizon to better give an illusion of an infinite ocean. Adapted UI for smaller devices.
+- **v1.8**: Added presets for every Roblox quality level. Added a fake horizon to better give an illusion of an infinite ocean. Adapted UI for smaller devices.
 - **v1.7**: Added individual wave adding/removing, plus bulk wave importing/exporting for sharing wave combinations.
 - **v1.6**: QoL changes; most notably, you can now drag the Gerstner wave panel around.
 - **v1.5**: Made wave-direction and wind-direction UI more intuitive.
