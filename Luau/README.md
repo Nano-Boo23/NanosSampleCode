@@ -13,3 +13,11 @@ After a long time of indecisiveness and a lot of variations in how I visually st
 | SCREAMING_SNAKE_CASE | Settings |
 | PascalCase | Global variables |
 | camelCase | Scoped variables |
+
+## File extension notes
+
+| Extension | Script type |
+| --- | --- |
+| `.lua` | Module script |
+| `.client.lua` | Local script |
+| `.server.lua` | Server script |
