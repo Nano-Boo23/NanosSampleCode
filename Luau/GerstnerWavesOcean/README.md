@@ -147,6 +147,7 @@ end
 
 Since Roblox limits the game description to 1000 characters, here's the full update log, most recent first:
 
+- **v1.13**: Made large improvements to the showcase game's UI, most notably by adding setting tooltip descriptions.
 - **v1.12**: Added a `DIAGONAL_BORDERS` toggle (8-neighbour border detection for corner seams) and refreshed the q1–q10 quality presets.
 - **v1.11**: Reworked edge propagation to only refresh rate-transition seams, further optimized `RenderWaves`, and made `ApplySettings` relink seam bones in place so toggling edge propagation no longer requires a `ResetMeshes()`.
 - **v1.10**: Heavily optimized mesh generation.
