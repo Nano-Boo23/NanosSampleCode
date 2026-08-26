@@ -1,6 +1,7 @@
 # Nano_Boo's general scripting portfolio
 
 Hiya! Welcome to my Github repository that I use as a scripting portfolio. Do note that it is still unfinished. <br>
+Check out [my most recent Luau project](https://github.com/Nano-Boo23/NanosSampleCode/blob/main/Luau/GerstnerWavesOcean/README.md)!
 
 ## About this portfolio and me
 I use this repo alongside a more updated and specific portfolio for each application I take to showcase my skills as a scripter. <br>
