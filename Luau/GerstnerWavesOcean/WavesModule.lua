@@ -10,7 +10,7 @@ local WavesModule = {}
 local LINK_THRESHOLD = 0.5  -- (studs) bones closer than this are considered shared at a seam
 local SPHERICAL_RENDERING = false --could cause problems if set to true (big spaces between meshes and horizon parts)
 
--- Check the github documentation buddy -> https://github.com/Nano-Boo23/NanosSampleCode/blob/main/Lua/GerstnerWavesOcean/README.md
+-- Check the github documentation buddy -> https://github.com/Nano-Boo23/NanosSampleCode/blob/main/Luau/GerstnerWavesOcean/README.md
 -- There are more complete explanations in there about the module's public config
 local conf = WavesModule --abbreviation purposes
 conf.DEBUG = false
