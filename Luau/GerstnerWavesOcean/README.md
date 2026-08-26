@@ -4,11 +4,29 @@
 
 This **open-source** module simulates an effectively infinite ocean by dynamically placing skinned meshes around the player's camera and moving the bones of those meshes with a **[Gerstner / trochoidal](https://en.wikipedia.org/wiki/Trochoidal_wave)** wave equation to produce realistic, rolling waves. It streams mesh tiles in and out as the player travels, keeps the part count roughly constant, and scales its cost to the player's graphics-quality setting.
 
-**Showcase game:** https://www.roblox.com/games/86081630361588/M-E-O-W
+**Showcase game:** https://www.roblox.com/games/86081630361588/M-E-O-W <br/>
+Note: The showcase game includes a buoyancy system and some boats, islands, and a couple of utility commands for commodity and showcase purposes.
+
+<br/>
+<br/>
+
 > What does M.E.O.W. stand for? **M**odule for **E**oA's **O**ptimized **W**aves, lol. I made this module for the Roblox game Echoes of Arcania, which I am also currently developing (as of 2026-06-07).
 <br/>
 
 ---
+
+## Showcase videos
+> Note: The module in this repository does not include the buoyancy system seen in the videos.
+
+<br/>
+Default max-quality waves preset plus a boat with buoyancy:
+
+https://github.com/user-attachments/assets/c5a8bf92-18e3-4d6a-941c-fed2f4dd31ae
+
+<br/>
+Editing waves in the showcase game with the built in panel:
+
+https://github.com/user-attachments/assets/ccefc64e-e132-4084-8c63-304c8fa1d1aa
 
 ## How does the module work?
 
@@ -29,7 +47,7 @@ To render the ocean, the module exposes 2 functions:
 | `GenerateMeshes(pos: Vector3)` | roughly every `0.5 s` | Places/reuses skinned-mesh tiles in a grid around `pos`. |
 | `RenderWaves()` | on `RenderStepped` | Runs the Gerstner math and moves the bones. |
 
-`GenerateMeshes` lays out mesh tiles in a grid around the given position. The radius is `RENDER_DISTANCE + BORDER_BUFFER` chunks. Tiles that drift out of range are returned to a pool and reused, so travelling across the ocean doesn't keep spawning new instances.
+`GenerateMeshes` lays out mesh tiles in a grid around the given position. The radius is `RENDER_DISTANCE + BORDER_BUFFER` chunks. Tiles that are positioned out of range are returned to a pool and reused, so travelling across the ocean doesn't keep spawning new instances.
 
 `RenderWaves` is where we have all of the wave computation stuff. For each active bone it sums the configured Gerstner waves, biases them by `WIND`, and writes the result to the bone's `Transform`. Tiles farther from the camera update less often and fade flat toward the render edge.
 
